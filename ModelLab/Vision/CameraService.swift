@@ -18,8 +18,6 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private(set) var session: AVCaptureSession?
     private var output: AVCaptureVideoDataOutput?
     private var device: AVCaptureDevice?
-    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
-    private var rotationObservation: NSKeyValueObservation?
     private let outputQueue = DispatchQueue(label: "camera-output-queue", qos: .userInitiated, autoreleaseFrequency: .workItem)
     
     nonisolated(unsafe) var callback: ((SendableWrapper<CMSampleBuffer>) -> Void)?
@@ -126,27 +124,15 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
                 connection.isVideoMirrored = true
             }
             let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
-            rotationCoordinator = coordinator
-            applyRotationAngle(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
-            rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.new]) { [weak self] _, change in
-                guard let angle = change.newValue else { return }
-                Task { await self?.updateRotationAngle(angle) }
+            let angle = coordinator.videoRotationAngleForHorizonLevelCapture
+            if connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
             }
         }
         
         session.commitConfiguration()
         
         self.session = session
-    }
-    
-    private func updateRotationAngle(_ angle: CGFloat) {
-        guard let connection = output?.connection(with: .video) else { return }
-        applyRotationAngle(angle, to: connection)
-    }
-    
-    private func applyRotationAngle(_ angle: CGFloat, to connection: AVCaptureConnection) {
-        guard connection.isVideoRotationAngleSupported(angle) else { return }
-        connection.videoRotationAngle = angle
     }
     
     enum CameraServiceError: Error {

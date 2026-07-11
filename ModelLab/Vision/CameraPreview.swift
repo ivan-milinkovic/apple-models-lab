@@ -18,26 +18,16 @@ final class PointMapper {
 }
 
 final class PreviewRotationTracker {
-    private var coordinator: AVCaptureDevice.RotationCoordinator?
-    private var observation: NSKeyValueObservation?
+    private var didApply = false
 
     func start(device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer) {
-        guard coordinator == nil else { return }
+        guard !didApply, let connection = previewLayer.connection else { return }
         let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
-        self.coordinator = coordinator
-        Self.apply(coordinator.videoRotationAngleForHorizonLevelPreview, to: previewLayer)
-        let layerBox = SendableWrapper(value: previewLayer)
-        observation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { _, change in
-            guard let angle = change.newValue else { return }
-            DispatchQueue.main.async {
-                Self.apply(angle, to: layerBox.value)
-            }
+        let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+        if connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
         }
-    }
-
-    private static func apply(_ angle: CGFloat, to previewLayer: AVCaptureVideoPreviewLayer) {
-        guard let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(angle) else { return }
-        connection.videoRotationAngle = angle
+        didApply = true
     }
 }
 
