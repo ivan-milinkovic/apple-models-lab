@@ -114,8 +114,7 @@ struct VisionView: View {
         Canvas { ctx, size in
             let color = colors[1]
             
-            let eyePoint = CGPoint(x: viewModel.eyePoint.x * size.width,
-                                   y: (1-viewModel.eyePoint.y) * size.height)
+            let eyePoint = mapPoint(viewModel.eyePoint, containerSize: size)
             let r = CGRect(origin: eyePoint,
                            size: CGSize(width: 8, height: 8))
             ctx.fill(Path(ellipseIn: r), with: .color(color))
@@ -201,17 +200,40 @@ struct VisionView: View {
         }
     }
     
+    /// Maps a normalized Vision point (origin bottom-left, y-up, relative to the upright
+    /// orientation-corrected image) directly onto the container view, replicating the
+    /// same aspect-fill scale + crop that the video preview itself uses. This uses the
+    /// real pixel buffer dimensions (viewModel.uprightImageSize) instead of going through
+    /// AVCaptureConnection APIs, so it doesn't depend on the connection's rotation/gravity
+    /// state being configured a particular way.
     private func mapPoint(_ p: CGPoint, containerSize size: CGSize) -> CGPoint {
-        // vision origin is bottom left, convert to swiftui origin
-        var p = CGPoint(x: p.x, y: 1-p.y)
-//        p = viewModel.pointMapper.convert(point: p)
-        let x = p.x * size.width
-        let y = p.y * size.height
-        return CGPoint(x: x, y: y)
+        let (scale, offset) = aspectFillTransform(containerSize: size)
+        guard let scale else { return .zero }
+        let imageSize = viewModel.uprightImageSize
+        // vision origin is bottom left, convert to top-left-origin image pixel coords
+        let imageX = p.x * imageSize.width
+        let imageY = (1 - p.y) * imageSize.height
+        return CGPoint(x: imageX * scale + offset.x, y: imageY * scale + offset.y)
     }
     
     private func mapSize(_ s: CGSize, containerSize size: CGSize) -> CGSize {
-        CGSize(width: s.width * size.width, height: s.height * size.height)
+        let (scale, _) = aspectFillTransform(containerSize: size)
+        guard let scale else { return .zero }
+        let imageSize = viewModel.uprightImageSize
+        return CGSize(width: s.width * imageSize.width * scale,
+                      height: s.height * imageSize.height * scale)
+    }
+    
+    /// Returns the uniform scale factor and centering offset that resizeAspectFill applies
+    /// when fitting `viewModel.uprightImageSize` into `containerSize`.
+    private func aspectFillTransform(containerSize size: CGSize) -> (scale: CGFloat?, offset: CGPoint) {
+        let imageSize = viewModel.uprightImageSize
+        guard imageSize.width > 0, imageSize.height > 0 else { return (nil, .zero) }
+        let scale = max(size.width / imageSize.width, size.height / imageSize.height)
+        let scaledWidth = imageSize.width * scale
+        let scaledHeight = imageSize.height * scale
+        let offset = CGPoint(x: (size.width - scaledWidth) / 2, y: (size.height - scaledHeight) / 2)
+        return (scale, offset)
     }
 }
 

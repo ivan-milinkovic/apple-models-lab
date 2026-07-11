@@ -9,6 +9,7 @@ import Foundation
 import Observation
 import Vision
 @preconcurrency import AVFoundation
+import CoreVideo
 
 @Observable @MainActor final class VisionViewModel {
     @ObservationIgnored let cameraService = CameraService()
@@ -18,6 +19,11 @@ import Vision
     var session: AVCaptureSession?
     var message: String?
     var detectionType: Mode = .mustaches
+    
+    /// Real dimensions of the *upright* (orientation-corrected) image that Vision's
+    /// normalized points are relative to. Used to do aspect-fill-aware mapping to the
+    /// preview view without depending on AVCaptureConnection's rotation/gravity state.
+    var uprightImageSize: CGSize = .zero
     
     var bodyPoseGroups: [DetectionGroup] = []
     var faceGroups: [DetectionGroup] = []
@@ -77,6 +83,8 @@ import Vision
             return
         }
         
+        updateUprightImageSize(from: buffer.value)
+        
         detectionRequest = makeRequest()
         defer { detectionRequest = nil}
         do {
@@ -86,6 +94,21 @@ import Vision
             try handle(observations: observations)
         } catch {
             message = error.localizedDescription
+        }
+    }
+    
+    /// Reads the raw pixel buffer's dimensions and swaps them if `orientation` implies
+    /// a 90°/270° rotation, giving the true width/height of the upright image that
+    /// Vision's normalized coordinates are relative to.
+    private func updateUprightImageSize(from sampleBuffer: CMSampleBuffer) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let rawWidth = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+        let rawHeight = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
+        switch orientation {
+        case .left, .leftMirrored, .right, .rightMirrored:
+            uprightImageSize = CGSize(width: rawHeight, height: rawWidth)
+        default:
+            uprightImageSize = CGSize(width: rawWidth, height: rawHeight)
         }
     }
     
