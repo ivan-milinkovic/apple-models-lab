@@ -29,6 +29,9 @@ struct CameraPreview: UIViewRepresentable {
         let view = CameraUIView()
         view.cameraLayer.session = session
         view.cameraLayer.videoGravity = .resizeAspect//Fill
+        // Fill would require additional utility:
+        // view.cameraLayer.layerPointConverted(fromCaptureDevicePoint: ...)
+        // called from host view to map points properly and avoid drift close to screen edges
         return view
     }
 
