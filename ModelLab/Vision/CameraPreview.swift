@@ -17,17 +17,39 @@ final class PointMapper {
     }
 }
 
-final class PreviewRotationTracker {
-    private var didApply = false
+final class PreviewRotationTracker: @unchecked Sendable {
+    private var coordinator: AVCaptureDevice.RotationCoordinator?
+    private var observation: NSKeyValueObservation?
+    private var outputConnection: AVCaptureConnection?
 
-    func start(device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer) {
-        guard !didApply, let connection = previewLayer.connection else { return }
-        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
-        let angle = coordinator.videoRotationAngleForHorizonLevelPreview
-        if connection.isVideoRotationAngleSupported(angle) {
+    func start(device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer, outputConnection: AVCaptureConnection?) {
+        self.outputConnection = outputConnection
+        
+        if coordinator == nil {
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+            self.coordinator = coordinator
+            // Wrap the layer so it isn't captured directly by the @Sendable KVO closure below.
+            let wrappedLayer = SendableWrapper(value: previewLayer)
+            observation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { [weak self] _, change in
+                guard let angle = change.newValue else { return }
+                DispatchQueue.main.async {
+                    Self.apply(angle, toPreview: wrappedLayer.value, andOutput: self?.outputConnection)
+                }
+            }
+        }
+
+        if let coordinator {
+            Self.apply(coordinator.videoRotationAngleForHorizonLevelPreview, toPreview: previewLayer, andOutput: outputConnection)
+        }
+    }
+
+    private static func apply(_ angle: CGFloat, toPreview previewLayer: AVCaptureVideoPreviewLayer, andOutput outputConnection: AVCaptureConnection?) {
+        if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
         }
-        didApply = true
+        if let outputConnection, outputConnection.isVideoRotationAngleSupported(angle) {
+            outputConnection.videoRotationAngle = angle
+        }
     }
 }
 
@@ -38,6 +60,7 @@ import UIKit
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
     let device: AVCaptureDevice?
+    let outputConnection: AVCaptureConnection?
     let pointMapper: PointMapper
 
     final class CameraUIView: UIView {
@@ -57,7 +80,7 @@ struct CameraPreview: UIViewRepresentable {
         view.cameraLayer.session = session
         view.cameraLayer.videoGravity = .resizeAspectFill
         if let device {
-            view.rotationTracker.start(device: device, previewLayer: view.cameraLayer)
+            view.rotationTracker.start(device: device, previewLayer: view.cameraLayer, outputConnection: outputConnection)
         }
         pointMapper.cameraLayer = view.cameraLayer
         return view
@@ -67,7 +90,7 @@ struct CameraPreview: UIViewRepresentable {
         guard let cameraView = uiView as? CameraUIView else { return }
         cameraView.cameraLayer.session = session
         if let device {
-            cameraView.rotationTracker.start(device: device, previewLayer: cameraView.cameraLayer)
+            cameraView.rotationTracker.start(device: device, previewLayer: cameraView.cameraLayer, outputConnection: outputConnection)
         }
     }
 }
@@ -79,6 +102,7 @@ import AppKit
 struct CameraPreview: NSViewRepresentable {
     let session: AVCaptureSession
     let device: AVCaptureDevice?
+    let outputConnection: AVCaptureConnection?
     let pointMapper: PointMapper
 
     final class CameraNSView: NSView {
@@ -106,7 +130,7 @@ struct CameraPreview: NSViewRepresentable {
         let view = CameraNSView()
         view.previewLayer.session = session
         if let device {
-            view.rotationTracker.start(device: device, previewLayer: view.previewLayer)
+            view.rotationTracker.start(device: device, previewLayer: view.previewLayer, outputConnection: outputConnection)
         }
         pointMapper.cameraLayer = view.previewLayer
         return view
@@ -116,7 +140,7 @@ struct CameraPreview: NSViewRepresentable {
         guard let cameraView = nsView as? CameraNSView else { return }
         cameraView.previewLayer.session = session
         if let device {
-            cameraView.rotationTracker.start(device: device, previewLayer: cameraView.previewLayer)
+            cameraView.rotationTracker.start(device: device, previewLayer: cameraView.previewLayer, outputConnection: outputConnection)
         }
     }
 }

@@ -59,6 +59,13 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         }
         return SendableWrapper(value: device)
     }
+
+    func getOutputConnection() async -> SendableWrapper<AVCaptureConnection>? {
+        guard let connection = output?.connection(with: .video) else {
+            return nil
+        }
+        return SendableWrapper(value: connection)
+    }
     
     private func handleAuthorization() async throws -> Bool {
         var isGranted = false
@@ -116,18 +123,8 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         session.addOutput(output)
         self.output = output
         
-        // Have AVFoundation itself deliver an already-upright, already-mirrored buffer,
-        // instead of handing Vision a raw landscape/unmirrored buffer and manually
-        // compensating for rotation/mirroring downstream.
-        if let connection = output.connection(with: .video) {
-            if connection.isVideoMirroringSupported {
-                connection.isVideoMirrored = true
-            }
-            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
-            let angle = coordinator.videoRotationAngleForHorizonLevelCapture
-            if connection.isVideoRotationAngleSupported(angle) {
-                connection.videoRotationAngle = angle
-            }
+        if let connection = output.connection(with: .video), connection.isVideoMirroringSupported {
+            connection.isVideoMirrored = true
         }
         
         session.commitConfiguration()

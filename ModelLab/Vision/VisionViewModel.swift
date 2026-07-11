@@ -20,12 +20,9 @@ import CoreVideo
     @ObservationIgnored var pointMapper = PointMapper()
     var session: AVCaptureSession?
     var captureDevice: AVCaptureDevice?
+    var outputConnection: AVCaptureConnection?
     var message: String?
     var detectionType: Mode = .mustaches
-    
-    /// Real dimensions of the *upright* (orientation-corrected) image that Vision's
-    /// normalized points are relative to. Used to do aspect-fill-aware mapping to the
-    /// preview view without depending on AVCaptureConnection's rotation/gravity state.
     var uprightImageSize: CGSize = .zero
     
     var bodyPoseGroups: [DetectionGroup] = []
@@ -69,6 +66,7 @@ import CoreVideo
             try await cameraService.setup()
             self.session = await cameraService.getSession()?.value
             self.captureDevice = await cameraService.getDevice()?.value
+            self.outputConnection = await cameraService.getOutputConnection()?.value
             await cameraService.setCallback { buffer in
                 Task { @Sendable in
                     await MainActor.run {
