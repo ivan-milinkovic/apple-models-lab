@@ -16,19 +16,43 @@ import Vision
     @ObservationIgnored var orientation = CGImagePropertyOrientation.leftMirrored
     var session: AVCaptureSession?
     var message: String?
-    var detectionType: DetectionType = .face
+    var detectionType: Mode = .mustaches
     
     var bodyPoseGroups: [DetectionGroup] = []
     var faceGroups: [DetectionGroup] = []
+    var mustaches = [MustachePoints]()
     
     var eyePoint: CGPoint = .zero
     var eyeHistory: [CGPoint] = .init(repeating: .zero, count: 64)
     let eyesHistoryDeltaTime: TimeInterval = 0.033
     var eyesLastHistoryDate: Date = Date()
     
-    enum DetectionType: CaseIterable {
-        case face, pose, eyes
+    // MARK: - Model
+    enum Mode: CaseIterable {
+        case face, pose, eyes, mustaches
     }
+    
+    struct MustachePoints: Identifiable {
+        var id: UUID
+        var lipsL: CGPoint = .zero
+        var lipsR: CGPoint = .zero
+        var lipsTop: CGPoint = .zero
+        var noseBot: CGPoint = .zero
+        var size: CGSize = .zero
+    }
+    
+    struct DetectionGroup: Identifiable {
+        let id = UUID()
+        let points: [DetectionPoint]
+    }
+    
+    struct DetectionPoint: Identifiable {
+        let id = UUID()
+        let name: String
+        let coords: CGPoint
+    }
+    
+    // MARK: -
     
     func setup() async {
         do {
@@ -68,7 +92,7 @@ import Vision
         switch detectionType {
         case .pose:
             VNDetectHumanBodyPoseRequest()
-        case .face, .eyes:
+        case .face, .eyes, .mustaches:
             VNDetectFaceLandmarksRequest()
         }
     }
@@ -81,18 +105,9 @@ import Vision
             processFaceLandmarks(observations as! [VNFaceObservation])
         case .eyes:
             processEyesLandmarks(observations as! [VNFaceObservation])
+        case .mustaches:
+            processFaceLandmarksForMustache(observations as! [VNFaceObservation])
         }
-    }
-    
-    struct DetectionGroup: Identifiable {
-        let id = UUID()
-        let points: [DetectionPoint]
-    }
-    
-    struct DetectionPoint: Identifiable {
-        let id = UUID()
-        let name: String
-        let coords: CGPoint
     }
     
     func processBodyPose(_ observations: [VNHumanBodyPoseObservation]) throws {
@@ -117,6 +132,60 @@ import Vision
             }
             return DetectionGroup(points: points)
         }
+    }
+    
+    func processFaceLandmarksForMustache(_ observations: [VNFaceObservation]) {
+        mustaches = observations.compactMap { face in
+            guard let landmarks = face.landmarks,
+                  let lips = landmarks.outerLips,
+                  let nose = landmarks.nose
+            else { return nil}
+            
+            guard let lipsL = lips.normalizedPoints.min(by: { $0.x < $1.x }),
+                  let lipsR = lips.normalizedPoints.max(by: { $0.x < $1.x }),
+                  var lipsTop = lips.normalizedPoints.max(by: { $0.y < $1.y }),
+                  var noseBot = nose.normalizedPoints.min(by: { $0.y < $1.y }) // it's upside down, starts from the bottom
+            else { return nil }
+            
+            // find centroids to adjust x coordinate
+            // fixes point fighting due to symmetry
+            var lipsCentroid = lips.normalizedPoints.reduce(into: CGPoint.zero) { partialResult, point in
+                partialResult.x += point.x
+                partialResult.y += point.y
+            }
+            lipsCentroid.x /= CGFloat(lips.pointCount)
+            lipsCentroid.y /= CGFloat(lips.pointCount)
+            lipsTop.x = lipsCentroid.x
+            
+            var noseCentroid = nose.normalizedPoints.reduce(into: CGPoint.zero) { partialResult, point in
+                partialResult.x += point.x
+                partialResult.y += point.y
+            }
+            noseCentroid.x /= CGFloat(nose.pointCount)
+            noseCentroid.y /= CGFloat(nose.pointCount)
+            noseBot.x = noseCentroid.x
+            
+            let lipsL2 = mapPoint(lipsL, face.boundingBox)
+            let lipsR2 = mapPoint(lipsR, face.boundingBox)
+            let lipsTop2 = mapPoint(lipsTop, face.boundingBox)
+            let noseBot2 = mapPoint(noseBot, face.boundingBox)
+            let size = CGSize(width: abs(lipsR2.x - lipsL2.x),
+                              height: abs(noseBot2.y - lipsTop.y))
+            
+            return MustachePoints(
+                id: face.uuid,
+                lipsL: lipsL2,
+                lipsR: lipsR2,
+                lipsTop: lipsTop2,
+                noseBot: noseBot2,
+                size: size
+            )
+        }
+    }
+    
+    func mapPoint(_ p: CGPoint, _ bbox: CGRect) -> CGPoint {
+        CGPoint(x: bbox.minX + p.x * bbox.width,
+                y: bbox.minY + p.y * bbox.height)
     }
     
     func processEyesLandmarks(_ observations: [VNFaceObservation]) {

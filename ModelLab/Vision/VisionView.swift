@@ -36,9 +36,10 @@ struct VisionView: View {
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
                 Picker("", selection: $viewModel.detectionType) {
-                    Text("Face").tag(VisionViewModel.DetectionType.face)
-                    Text("Pose").tag(VisionViewModel.DetectionType.pose)
-                    Text("Eyes").tag(VisionViewModel.DetectionType.eyes)
+                    Text("Face").tag(VisionViewModel.Mode.face)
+                    Text("Pose").tag(VisionViewModel.Mode.pose)
+                    Text("Eyes").tag(VisionViewModel.Mode.eyes)
+                    Text("Mustaches").tag(VisionViewModel.Mode.mustaches)
                 }
                 .pickerStyle(.segmented)
             }
@@ -52,6 +53,7 @@ struct VisionView: View {
                 case .face: facePoints
                 case .pose: bodyPosePoints
                 case .eyes: eyeLines
+                case .mustaches: mustaches
                 }
             }
     }
@@ -126,6 +128,70 @@ struct VisionView: View {
     }
     
     private let colors: [Color] = [.orange, .blue, .purple, .yellow]
+    
+    @ViewBuilder private var mustaches: some View {
+        ForEach(viewModel.mustaches) { m in
+            mustache(m)
+        }
+    }
+    
+    @ViewBuilder private func mustache(_ mustache: VisionViewModel.MustachePoints) -> some View {
+        Canvas { ctx, size in
+            
+            var lipsL = mapPoint(mustache.lipsL, containerSize: size)
+            var lipsR = mapPoint(mustache.lipsR, containerSize: size)
+            let lipsTop = mapPoint(mustache.lipsTop, containerSize: size)
+            let noseBot = mapPoint(mustache.noseBot, containerSize: size)
+            let size = mapSize(mustache.size, containerSize: size)
+            
+            // Strech a bit
+            lipsL = lipsL.applying(CGAffineTransform.init(translationX: -size.width*0.3, y: 0))
+            lipsR = lipsR.applying(CGAffineTransform.init(translationX:  size.width*0.3, y: 0))
+            
+            // simple test
+            // var path = Path()
+            // path.move(to: lipsL)
+            // path.addLine(to: noseBot)
+            // path.addLine(to: mapPoint(mustache.lipsR, size))
+            // path.addLine(to: mapPoint(mustache.lipsTop, size))
+            // path.closeSubpath()
+ 
+            var path = Path()
+            path.move(to: lipsL)
+            path.addCurve(
+                to: noseBot,
+                control1: lipsL.applying(CGAffineTransform(translationX: size.width*0.25, y: -size.height*0.06)),
+                control2: noseBot.applying(CGAffineTransform(translationX: -size.width*0.3, y: -size.height*0.1))
+            )
+            path.addCurve(
+                to: lipsR,
+                control1: noseBot.applying(CGAffineTransform(translationX: size.width*0.3, y: -size.height*0.1)),
+                control2: lipsR.applying(CGAffineTransform(translationX: -size.width*0.25, y: -size.height*0.06))
+            )
+            path.addCurve(
+                to: lipsTop,
+                control1: lipsR.applying(CGAffineTransform(translationX: -size.width*0.25, y: size.height*0.1)),
+                control2: lipsTop.applying(CGAffineTransform(translationX: size.width*0.25, y: size.height*0.06))
+            )
+            path.addCurve(
+                to: lipsL,
+                control1: lipsTop.applying(CGAffineTransform(translationX: -size.width*0.25, y: size.height*0.06)),
+                control2: lipsL.applying(CGAffineTransform(translationX: size.width*0.25, y: size.height*0.1))
+            )
+            
+            ctx.fill(path, with: .color(.black))
+        }
+    }
+    
+    private func mapPoint(_ p: CGPoint, containerSize size: CGSize) -> CGPoint {
+        let x = p.x * size.width
+        let y = (1 - p.y) * size.height
+        return CGPoint(x: x, y: y)
+    }
+    
+    private func mapSize(_ s: CGSize, containerSize size: CGSize) -> CGSize {
+        CGSize(width: s.width * size.width, height: s.height * size.height)
+    }
 }
 
 #Preview {
