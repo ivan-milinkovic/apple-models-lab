@@ -19,6 +19,7 @@ import CoreVideo
     @ObservationIgnored let orientation = CGImagePropertyOrientation.up
     @ObservationIgnored var pointMapper = PointMapper()
     var session: AVCaptureSession?
+    var captureDevice: AVCaptureDevice?
     var message: String?
     var detectionType: Mode = .mustaches
     
@@ -67,6 +68,7 @@ import CoreVideo
         do {
             try await cameraService.setup()
             self.session = await cameraService.getSession()?.value
+            self.captureDevice = await cameraService.getDevice()?.value
             await cameraService.setCallback { buffer in
                 Task { @Sendable in
                     await MainActor.run {

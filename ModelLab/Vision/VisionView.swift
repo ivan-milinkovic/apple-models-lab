@@ -55,7 +55,7 @@ struct VisionView: View {
     }
     
     private func camera(session: AVCaptureSession) -> some View {
-        CameraPreview(session: session, pointMapper: viewModel.pointMapper)
+        CameraPreview(session: session, device: viewModel.captureDevice, pointMapper: viewModel.pointMapper)
             .overlay {
                 switch viewModel.detectionType {
                 case .face: facePoints

@@ -17,6 +17,7 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     private(set) var session: AVCaptureSession?
     private var output: AVCaptureVideoDataOutput?
+    private var device: AVCaptureDevice?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
     private let outputQueue = DispatchQueue(label: "camera-output-queue", qos: .userInitiated, autoreleaseFrequency: .workItem)
@@ -54,6 +55,13 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         return SendableWrapper(value: session)
     }
     
+    func getDevice() async -> SendableWrapper<AVCaptureDevice>? {
+        guard let device else {
+            return nil
+        }
+        return SendableWrapper(value: device)
+    }
+    
     private func handleAuthorization() async throws -> Bool {
         var isGranted = false
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -76,6 +84,7 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let device = AVCaptureDevice.default(AVCaptureDevice.DeviceType.builtInWideAngleCamera, for: .video, position: .front) else {
             throw CameraServiceError.failedToGetGevice
         }
+        self.device = device
         
         do {
             try device.lockForConfiguration()
