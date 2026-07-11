@@ -14,6 +14,7 @@ import Vision
     @ObservationIgnored let cameraService = CameraService()
     @ObservationIgnored var detectionRequest: VNImageBasedRequest?
     @ObservationIgnored var orientation = CGImagePropertyOrientation.leftMirrored
+    @ObservationIgnored var pointMapper = PointMapper()
     var session: AVCaptureSession?
     var message: String?
     var detectionType: Mode = .mustaches

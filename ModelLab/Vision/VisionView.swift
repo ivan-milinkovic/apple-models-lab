@@ -34,20 +34,28 @@ struct VisionView: View {
             Task { await viewModel.stop() }
         }
         .toolbar {
-            ToolbarItem(placement: .bottomBar) {
+            ToolbarItem(placement: toolbarPlacement()) {
                 Picker("", selection: $viewModel.detectionType) {
                     Text("Face").tag(VisionViewModel.Mode.face)
                     Text("Pose").tag(VisionViewModel.Mode.pose)
                     Text("Eyes").tag(VisionViewModel.Mode.eyes)
-                    Text("Mustaches").tag(VisionViewModel.Mode.mustaches)
+                    Text("Mustache").tag(VisionViewModel.Mode.mustaches)
                 }
                 .pickerStyle(.segmented)
             }
         }
     }
     
+    private func toolbarPlacement() -> ToolbarItemPlacement {
+        #if os(iOS)
+        .bottomBar
+        #else
+        .automatic
+        #endif
+    }
+    
     private func camera(session: AVCaptureSession) -> some View {
-        CameraPreview(session: session)
+        CameraPreview(session: session, pointMapper: viewModel.pointMapper)
             .overlay {
                 switch viewModel.detectionType {
                 case .face: facePoints
@@ -63,11 +71,10 @@ struct VisionView: View {
             for (i, group) in viewModel.bodyPoseGroups.enumerated() {
                 let color = colors[i % colors.count]
                 for point in group.points {
-                    let x = point.coords.x * size.width
-                    let y = (1 - point.coords.y) * size.height
-                    let r = CGRect(x: x-5, y: y-5, width: 10, height: 10)
+                    let p = mapPoint(point.coords, containerSize: size)
+                    let r = CGRect(x: p.x-5, y: p.y-5, width: 10, height: 10)
                     ctx.fill(Path(ellipseIn: r), with: .color(color))
-                    let r2 = CGRect(x: x-5, y: y-10, width: 200, height: 50)
+                    let r2 = CGRect(x: p.x-5, y: p.y-10, width: 200, height: 50)
                     ctx.draw(Text(point.name), in: r2)
                 }
             }
@@ -80,11 +87,10 @@ struct VisionView: View {
             for (i, group) in viewModel.faceGroups.enumerated() {
                 let color = colors[i % colors.count]
                 for point in group.points {
-                    let x = point.coords.x * size.width
-                    let y = (1 - point.coords.y) * size.height
-                    let r = CGRect(x: x-dotSize/2, y: y-dotSize/2, width: dotSize, height: dotSize)
+                    let p = mapPoint(point.coords, containerSize: size)
+                    let r = CGRect(x: p.x-dotSize/2, y: p.y-dotSize/2, width: dotSize, height: dotSize)
                     ctx.fill(Path(ellipseIn: r), with: .color(color))
-                    let r2 = CGRect(x: x-5, y: y-10, width: 200, height: 50)
+                    let r2 = CGRect(x: p.x-5, y: p.y-10, width: 200, height: 50)
                     ctx.draw(Text(point.name), in: r2)
                 }
             }
@@ -97,9 +103,8 @@ struct VisionView: View {
             let color = colors[1]
             for (i, point) in viewModel.eyeHistory.enumerated() {
                 let opacity = 0.5 * (1 - Double(i) / Double(viewModel.eyeHistory.count))
-                let x = point.x * size.width
-                let y = (1 - point.y) * size.height
-                let r = CGRect(x: x-dotSize/2, y: y-dotSize/2, width: dotSize, height: dotSize)
+                let p = mapPoint(point, containerSize: size)
+                let r = CGRect(x: p.x-dotSize/2, y: p.y-dotSize/2, width: dotSize, height: dotSize)
                 ctx.fill(Path(ellipseIn: r), with: .color(color.opacity(opacity)))
             }
         }
@@ -119,9 +124,8 @@ struct VisionView: View {
             path.move(to: eyePoint)
             for (_, point) in viewModel.eyeHistory.enumerated() {
                 if point.x == -1 { break }
-                let x = point.x * size.width
-                let y = (1 - point.y) * size.height
-                path.addLine(to: .init(x: x, y: y))
+                let p = mapPoint(point, containerSize: size)
+                path.addLine(to: p)
             }
             ctx.stroke(path, with: .color(color), style: .init(lineWidth: 8))
         }
@@ -162,8 +166,8 @@ struct VisionView: View {
             
             let xt_more = size.width*0.3
             let xt_less = size.width*0.2
-            let yt_more = size.height*0.3
-            let yt_less = size.height*0.06
+            let yt_more = size.height*0.4
+            let yt_less = size.height*0.1
             
             // Left to nose
             path.addCurve(
@@ -198,8 +202,11 @@ struct VisionView: View {
     }
     
     private func mapPoint(_ p: CGPoint, containerSize size: CGSize) -> CGPoint {
+        // vision origin is bottom left, convert to swiftui origin
+        var p = CGPoint(x: p.x, y: 1-p.y)
+//        p = viewModel.pointMapper.convert(point: p)
         let x = p.x * size.width
-        let y = (1 - p.y) * size.height
+        let y = p.y * size.height
         return CGPoint(x: x, y: y)
     }
     

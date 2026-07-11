@@ -8,12 +8,22 @@
 import SwiftUI
 import AVFoundation
 
+final class PointMapper {
+    var cameraLayer: AVCaptureVideoPreviewLayer?
+    
+    func convert(point: CGPoint) -> CGPoint {
+        guard let cameraLayer else { return .zero }
+        return cameraLayer.layerPointConverted(fromCaptureDevicePoint: point)
+    }
+}
+
 #if os(iOS)
 
 import UIKit
 
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    let pointMapper: PointMapper
 
     final class CameraUIView: UIView {
         override class var layerClass: AnyClass {
@@ -28,10 +38,8 @@ struct CameraPreview: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = CameraUIView()
         view.cameraLayer.session = session
-        view.cameraLayer.videoGravity = .resizeAspect//Fill
-        // Fill would require additional utility:
-        // view.cameraLayer.layerPointConverted(fromCaptureDevicePoint: ...)
-        // called from host view to map points properly and avoid drift close to screen edges
+        view.cameraLayer.videoGravity = .resizeAspectFill
+        pointMapper.cameraLayer = view.cameraLayer
         return view
     }
 
@@ -47,6 +55,7 @@ import AppKit
 
 struct CameraPreview: NSViewRepresentable {
     let session: AVCaptureSession
+    let pointMapper: PointMapper
 
     final class CameraNSView: NSView {
         let previewLayer = AVCaptureVideoPreviewLayer()
@@ -71,6 +80,7 @@ struct CameraPreview: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = CameraNSView()
         view.previewLayer.session = session
+        pointMapper.cameraLayer = view.previewLayer
         return view
     }
 
