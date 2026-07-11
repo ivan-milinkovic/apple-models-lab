@@ -157,26 +157,40 @@ struct VisionView: View {
             // path.closeSubpath()
  
             var path = Path()
+            
             path.move(to: lipsL)
+            
+            let xt_more = size.width*0.3
+            let xt_less = size.width*0.2
+            let yt_more = size.height*0.3
+            let yt_less = size.height*0.06
+            
+            // Left to nose
             path.addCurve(
                 to: noseBot,
-                control1: lipsL.applying(CGAffineTransform(translationX: size.width*0.25, y: -size.height*0.06)),
-                control2: noseBot.applying(CGAffineTransform(translationX: -size.width*0.3, y: -size.height*0.1))
+                control1:   lipsL.applying(CGAffineTransform(translationX:  xt_more, y: -yt_less)),
+                control2: noseBot.applying(CGAffineTransform(translationX: -xt_more, y: -yt_more))
             )
+            
+            // Nose to right
             path.addCurve(
                 to: lipsR,
-                control1: noseBot.applying(CGAffineTransform(translationX: size.width*0.3, y: -size.height*0.1)),
-                control2: lipsR.applying(CGAffineTransform(translationX: -size.width*0.25, y: -size.height*0.06))
+                control1: noseBot.applying(CGAffineTransform(translationX:  xt_more, y: -yt_more)),
+                control2:   lipsR.applying(CGAffineTransform(translationX: -xt_less, y: -yt_less))
             )
+            
+            // Right to top lip
             path.addCurve(
                 to: lipsTop,
-                control1: lipsR.applying(CGAffineTransform(translationX: -size.width*0.25, y: size.height*0.1)),
-                control2: lipsTop.applying(CGAffineTransform(translationX: size.width*0.25, y: size.height*0.06))
+                control1:   lipsR.applying(CGAffineTransform(translationX: -xt_more, y: yt_more)),
+                control2: lipsTop.applying(CGAffineTransform(translationX:  xt_more, y: yt_more))
             )
+            
+            // Top lip to left
             path.addCurve(
                 to: lipsL,
-                control1: lipsTop.applying(CGAffineTransform(translationX: -size.width*0.25, y: size.height*0.06)),
-                control2: lipsL.applying(CGAffineTransform(translationX: size.width*0.25, y: size.height*0.1))
+                control1: lipsTop.applying(CGAffineTransform(translationX: -xt_more, y: yt_more)),
+                control2:   lipsL.applying(CGAffineTransform(translationX:  xt_less, y: yt_more))
             )
             
             ctx.fill(path, with: .color(.black))

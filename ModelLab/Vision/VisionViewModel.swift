@@ -141,36 +141,26 @@ import Vision
                   let nose = landmarks.nose
             else { return nil}
             
-            guard let lipsL = lips.normalizedPoints.min(by: { $0.x < $1.x }),
-                  let lipsR = lips.normalizedPoints.max(by: { $0.x < $1.x }),
-                  var lipsTop = lips.normalizedPoints.max(by: { $0.y < $1.y }),
-                  var noseBot = nose.normalizedPoints.min(by: { $0.y < $1.y }) // it's upside down, starts from the bottom
+            let lipsPoints = lips.normalizedPoints
+            let nosePoints = nose.normalizedPoints
+            
+            guard let lipsL = lipsPoints.min(by: { $0.x < $1.x }),
+                  let lipsR = lipsPoints.max(by: { $0.x < $1.x }),
+                  var lipsTop = lipsPoints.max(by: { $0.y < $1.y }),
+                  var noseBot = nosePoints.min(by: { $0.y < $1.y }) // it's upside down, starts from the bottom
             else { return nil }
             
             // find centroids to adjust x coordinate
             // fixes point fighting due to symmetry
-            var lipsCentroid = lips.normalizedPoints.reduce(into: CGPoint.zero) { partialResult, point in
-                partialResult.x += point.x
-                partialResult.y += point.y
-            }
-            lipsCentroid.x /= CGFloat(lips.pointCount)
-            lipsCentroid.y /= CGFloat(lips.pointCount)
-            lipsTop.x = lipsCentroid.x
-            
-            var noseCentroid = nose.normalizedPoints.reduce(into: CGPoint.zero) { partialResult, point in
-                partialResult.x += point.x
-                partialResult.y += point.y
-            }
-            noseCentroid.x /= CGFloat(nose.pointCount)
-            noseCentroid.y /= CGFloat(nose.pointCount)
-            noseBot.x = noseCentroid.x
+            lipsTop.x = centroid(of: lipsPoints).x
+            noseBot.x = centroid(of: nosePoints).x
             
             let lipsL2 = mapPoint(lipsL, face.boundingBox)
             let lipsR2 = mapPoint(lipsR, face.boundingBox)
             let lipsTop2 = mapPoint(lipsTop, face.boundingBox)
             let noseBot2 = mapPoint(noseBot, face.boundingBox)
             let size = CGSize(width: abs(lipsR2.x - lipsL2.x),
-                              height: abs(noseBot2.y - lipsTop.y))
+                              height: abs(noseBot2.y - lipsTop2.y))
             
             return MustachePoints(
                 id: face.uuid,
@@ -181,6 +171,16 @@ import Vision
                 size: size
             )
         }
+    }
+    
+    func centroid(of points: [CGPoint]) -> CGPoint {
+        guard !points.isEmpty else { return .zero }
+        let sum = points.reduce(CGPoint.zero) { acc, point in
+            CGPoint(x: acc.x + point.x,
+                    y: acc.y + point.y)
+        }
+        return CGPoint(x: sum.x / CGFloat(points.count),
+                       y: sum.y / CGFloat(points.count))
     }
     
     func mapPoint(_ p: CGPoint, _ bbox: CGRect) -> CGPoint {
