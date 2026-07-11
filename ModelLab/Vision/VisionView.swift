@@ -14,8 +14,8 @@ struct VisionView: View {
     
     var body: some View {
         VStack {
-            if let captureSession = viewModel.session {
-                camera(session: captureSession)
+            if viewModel.isReady {
+                camera()
                     .ignoresSafeArea()
             } else {
                 ProgressView()
@@ -54,8 +54,8 @@ struct VisionView: View {
         #endif
     }
     
-    private func camera(session: AVCaptureSession) -> some View {
-        CameraPreview(session: session, device: viewModel.captureDevice, outputConnection: viewModel.outputConnection, pointMapper: viewModel.pointMapper)
+    private func camera() -> some View {
+        CameraPreview(previewLayer: viewModel.previewLayer)
             .overlay {
                 switch viewModel.detectionType {
                 case .face: facePoints

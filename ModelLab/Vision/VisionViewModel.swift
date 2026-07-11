@@ -13,14 +13,12 @@ import CoreVideo
 
 @Observable @MainActor final class VisionViewModel {
     @ObservationIgnored let cameraService = CameraService()
+    @ObservationIgnored let previewLayer = AVCaptureVideoPreviewLayer()
     @ObservationIgnored var detectionRequest: VNImageBasedRequest?
     // The video data output connection now delivers an already-upright, already-mirrored
     // buffer (see CameraService), so Vision doesn't need any rotation/mirror hint.
     @ObservationIgnored let orientation = CGImagePropertyOrientation.up
-    @ObservationIgnored var pointMapper = PointMapper()
-    var session: AVCaptureSession?
-    var captureDevice: AVCaptureDevice?
-    var outputConnection: AVCaptureConnection?
+    var isReady = false
     var message: String?
     var detectionType: Mode = .mustaches
     var uprightImageSize: CGSize = .zero
@@ -63,10 +61,8 @@ import CoreVideo
     
     func setup() async {
         do {
-            try await cameraService.setup()
-            self.session = await cameraService.getSession()?.value
-            self.captureDevice = await cameraService.getDevice()?.value
-            self.outputConnection = await cameraService.getOutputConnection()?.value
+            try await cameraService.setup(previewLayer: SendableWrapper(value: previewLayer))
+            isReady = true
             await cameraService.setCallback { buffer in
                 Task { @Sendable in
                     await MainActor.run {

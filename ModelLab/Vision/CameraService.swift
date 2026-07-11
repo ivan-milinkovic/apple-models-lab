@@ -18,16 +18,19 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private(set) var session: AVCaptureSession?
     private var output: AVCaptureVideoDataOutput?
     private var device: AVCaptureDevice?
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationObservation: NSKeyValueObservation?
     private let outputQueue = DispatchQueue(label: "camera-output-queue", qos: .userInitiated, autoreleaseFrequency: .workItem)
     
     nonisolated(unsafe) var callback: ((SendableWrapper<CMSampleBuffer>) -> Void)?
-    
-    func setup() async throws {
+
+    func setup(previewLayer: SendableWrapper<AVCaptureVideoPreviewLayer>) async throws {
         guard session == nil else { return }
         guard try await handleAuthorization() else {
             return
         }
-        try setupSession()
+        try setupSession(previewLayer: previewLayer.value)
     }
     
     func setCallback(_ callback: @escaping @Sendable (SendableWrapper<CMSampleBuffer>) -> Void) {
@@ -46,27 +49,6 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         print("Camera stopped")
     }
     
-    func getSession() async -> SendableWrapper<AVCaptureSession>? {
-        guard let session else {
-            return nil
-        }
-        return SendableWrapper(value: session)
-    }
-    
-    func getDevice() async -> SendableWrapper<AVCaptureDevice>? {
-        guard let device else {
-            return nil
-        }
-        return SendableWrapper(value: device)
-    }
-
-    func getOutputConnection() async -> SendableWrapper<AVCaptureConnection>? {
-        guard let connection = output?.connection(with: .video) else {
-            return nil
-        }
-        return SendableWrapper(value: connection)
-    }
-    
     private func handleAuthorization() async throws -> Bool {
         var isGranted = false
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -82,7 +64,7 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     
     
-    private func setupSession() throws {
+    private func setupSession(previewLayer: AVCaptureVideoPreviewLayer) throws {
         let session = AVCaptureSession()
         session.beginConfiguration()
         
@@ -127,9 +109,30 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             connection.isVideoMirrored = true
         }
         
+        self.previewLayer = previewLayer
+        previewLayer.session = session
+        previewLayer.videoGravity = .resizeAspectFill
+        
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+        rotationCoordinator = coordinator
+        applyRotationAngle(coordinator.videoRotationAngleForHorizonLevelPreview)
+        rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { [weak self] _, change in
+            guard let angle = change.newValue else { return }
+            Task { await self?.applyRotationAngle(angle) }
+        }
+        
         session.commitConfiguration()
         
         self.session = session
+    }
+    
+    private func applyRotationAngle(_ angle: CGFloat) {
+        if let previewConnection = previewLayer?.connection, previewConnection.isVideoRotationAngleSupported(angle) {
+            previewConnection.videoRotationAngle = angle
+        }
+        if let outputConnection = output?.connection(with: .video), outputConnection.isVideoRotationAngleSupported(angle) {
+            outputConnection.videoRotationAngle = angle
+        }
     }
     
     enum CameraServiceError: Error {
