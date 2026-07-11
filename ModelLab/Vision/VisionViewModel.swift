@@ -14,7 +14,9 @@ import CoreVideo
 @Observable @MainActor final class VisionViewModel {
     @ObservationIgnored let cameraService = CameraService()
     @ObservationIgnored var detectionRequest: VNImageBasedRequest?
-    @ObservationIgnored var orientation = CGImagePropertyOrientation.leftMirrored
+    // The video data output connection now delivers an already-upright, already-mirrored
+    // buffer (see CameraService), so Vision doesn't need any rotation/mirror hint.
+    @ObservationIgnored let orientation = CGImagePropertyOrientation.up
     @ObservationIgnored var pointMapper = PointMapper()
     var session: AVCaptureSession?
     var message: String?
@@ -97,19 +99,14 @@ import CoreVideo
         }
     }
     
-    /// Reads the raw pixel buffer's dimensions and swaps them if `orientation` implies
-    /// a 90°/270° rotation, giving the true width/height of the upright image that
-    /// Vision's normalized coordinates are relative to.
+    /// Reads the raw pixel buffer's dimensions, which the video data output connection
+    /// already delivers upright and orientation-corrected (see CameraService), so no
+    /// manual width/height swapping is needed here anymore.
     private func updateUprightImageSize(from sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let rawWidth = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-        let rawHeight = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-        switch orientation {
-        case .left, .leftMirrored, .right, .rightMirrored:
-            uprightImageSize = CGSize(width: rawHeight, height: rawWidth)
-        default:
-            uprightImageSize = CGSize(width: rawWidth, height: rawHeight)
-        }
+        let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+        let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
+        uprightImageSize = CGSize(width: width, height: height)
     }
     
     private func makeRequest() -> VNImageBasedRequest {

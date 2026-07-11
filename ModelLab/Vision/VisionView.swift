@@ -202,10 +202,7 @@ struct VisionView: View {
     
     /// Maps a normalized Vision point (origin bottom-left, y-up, relative to the upright
     /// orientation-corrected image) directly onto the container view, replicating the
-    /// same aspect-fill scale + crop that the video preview itself uses. This uses the
-    /// real pixel buffer dimensions (viewModel.uprightImageSize) instead of going through
-    /// AVCaptureConnection APIs, so it doesn't depend on the connection's rotation/gravity
-    /// state being configured a particular way.
+    /// same aspect-fill scale + crop that the video preview itself uses.
     private func mapPoint(_ p: CGPoint, containerSize size: CGSize) -> CGPoint {
         let (scale, offset) = aspectFillTransform(containerSize: size)
         guard let scale else { return .zero }

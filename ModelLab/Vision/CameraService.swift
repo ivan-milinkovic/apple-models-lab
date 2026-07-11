@@ -17,7 +17,8 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     private(set) var session: AVCaptureSession?
     private var output: AVCaptureVideoDataOutput?
-    // private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationObservation: NSKeyValueObservation?
     private let outputQueue = DispatchQueue(label: "camera-output-queue", qos: .userInitiated, autoreleaseFrequency: .workItem)
     
     nonisolated(unsafe) var callback: ((SendableWrapper<CMSampleBuffer>) -> Void)?
@@ -108,21 +109,36 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         session.addOutput(output)
         self.output = output
         
-//        rotationCoordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
-//        if let conn = output.connection(with: .video) {
-//            if conn.isVideoMirroringSupported {
-//                conn.isVideoMirrored = true
-//            }
-//            conn.isVideoMirrored = true
-//            conn.videoRotationAngle = 270
-//        }
+        // Have AVFoundation itself deliver an already-upright, already-mirrored buffer,
+        // instead of handing Vision a raw landscape/unmirrored buffer and manually
+        // compensating for rotation/mirroring downstream.
+        if let connection = output.connection(with: .video) {
+            if connection.isVideoMirroringSupported {
+                connection.isVideoMirrored = true
+            }
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+            rotationCoordinator = coordinator
+            applyRotationAngle(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
+            rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.new]) { [weak self] _, change in
+                guard let angle = change.newValue else { return }
+                Task { await self?.updateRotationAngle(angle) }
+            }
+        }
         
         session.commitConfiguration()
         
         self.session = session
     }
     
-    // output.connection(with: .video)?.videoRotationAngle = rotationCoordinator.videoRotationAngleForHorizonLevelCapture
+    private func updateRotationAngle(_ angle: CGFloat) {
+        guard let connection = output?.connection(with: .video) else { return }
+        applyRotationAngle(angle, to: connection)
+    }
+    
+    private func applyRotationAngle(_ angle: CGFloat, to connection: AVCaptureConnection) {
+        guard connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
+    }
     
     enum CameraServiceError: Error {
         case denied
