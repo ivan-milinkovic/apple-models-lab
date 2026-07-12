@@ -15,7 +15,7 @@ struct VisionView: View {
     var body: some View {
         VStack {
             if viewModel.isReady {
-                camera()
+                camera
                     .ignoresSafeArea()
             } else {
                 ProgressView()
@@ -23,6 +23,12 @@ struct VisionView: View {
             if let message = viewModel.message {
                 Text(message)
             }
+        }
+        .containerRelativeFrame([.horizontal, .vertical])
+        .overlay(alignment: .bottomTrailing) {
+            #if os(iOS)
+            cameraSwitchButton
+            #endif
         }
         .task {
             await viewModel.setup()
@@ -54,7 +60,7 @@ struct VisionView: View {
         #endif
     }
     
-    private func camera() -> some View {
+    @ViewBuilder private var camera: some View {
         CameraPreview(previewLayer: viewModel.previewLayer)
             .overlay {
                 switch viewModel.detectionType {
@@ -64,6 +70,19 @@ struct VisionView: View {
                 case .mustaches: mustaches
                 }
             }
+    }
+    
+    @ViewBuilder private var cameraSwitchButton: some View {
+        Button {
+            viewModel.switchCamera()
+        } label: {
+            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90.camera")
+                .padding()
+                .background(Circle().fill(.thinMaterial))
+                .background(Circle().stroke(Color.accentColor))
+                .contentShape(Circle())
+        }
+        .padding(.trailing, 32)
     }
     
     @ViewBuilder private var bodyPosePoints: some View {
@@ -235,5 +254,7 @@ struct VisionView: View {
 }
 
 #Preview {
-    VisionView()
+    NavigationStack {
+        VisionView()
+    }
 }

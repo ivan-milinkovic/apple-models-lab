@@ -15,9 +15,6 @@ import CoreVideo
     @ObservationIgnored let cameraService = CameraService()
     @ObservationIgnored let previewLayer = AVCaptureVideoPreviewLayer()
     @ObservationIgnored var detectionRequest: VNImageBasedRequest?
-    // The video data output connection now delivers an already-upright, already-mirrored
-    // buffer (see CameraService), so Vision doesn't need any rotation/mirror hint.
-    @ObservationIgnored let orientation = CGImagePropertyOrientation.up
     var isReady = false
     var message: String?
     var detectionType: Mode = .mustaches
@@ -86,7 +83,9 @@ import CoreVideo
         detectionRequest = makeRequest()
         defer { detectionRequest = nil}
         do {
-            let imageHandler = VNImageRequestHandler(cmSampleBuffer: buffer.value, orientation: orientation)
+            // The video data output connection now delivers an already-upright, already-mirrored
+            // buffer (see CameraService), so Vision doesn't need any rotation/mirror hint.
+            let imageHandler = VNImageRequestHandler(cmSampleBuffer: buffer.value, orientation: .up)
             try imageHandler.perform([detectionRequest!])
             guard let observations = detectionRequest?.results else { return }
             try handle(observations: observations)
@@ -251,4 +250,13 @@ import CoreVideo
         await cameraService.stop()
     }
     
+    func switchCamera() {
+        Task {
+            do {
+                try await cameraService.switchCamera()
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
 }

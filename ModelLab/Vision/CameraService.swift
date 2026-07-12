@@ -22,6 +22,7 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
     private let outputQueue = DispatchQueue(label: "camera-output-queue", qos: .userInitiated, autoreleaseFrequency: .workItem)
+    private(set) var isBackCamera = false
     
     nonisolated(unsafe) var callback: ((SendableWrapper<CMSampleBuffer>) -> Void)?
 
@@ -62,13 +63,17 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         return isGranted
     }
     
-    
-    
     private func setupSession(previewLayer: AVCaptureVideoPreviewLayer) throws {
+        
+        stop()
         let session = AVCaptureSession()
         session.beginConfiguration()
         
-        guard let device = AVCaptureDevice.default(AVCaptureDevice.DeviceType.builtInWideAngleCamera, for: .video, position: .front) else {
+        guard let device = AVCaptureDevice.default(
+            AVCaptureDevice.DeviceType.builtInWideAngleCamera,
+            for: .video,
+            position: isBackCamera ? .back : .front)
+        else {
             throw CameraServiceError.failedToGetGevice
         }
         self.device = device
@@ -105,7 +110,7 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         session.addOutput(output)
         self.output = output
         
-        if let connection = output.connection(with: .video), connection.isVideoMirroringSupported {
+        if !isBackCamera, let connection = output.connection(with: .video), connection.isVideoMirroringSupported {
             connection.isVideoMirrored = true
         }
         
@@ -133,6 +138,13 @@ actor CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         if let outputConnection = output?.connection(with: .video), outputConnection.isVideoRotationAngleSupported(angle) {
             outputConnection.videoRotationAngle = angle
         }
+    }
+    
+    func switchCamera() throws {
+        guard let previewLayer else { return }
+        isBackCamera.toggle()
+        try setupSession(previewLayer: previewLayer)
+        start()
     }
     
     enum CameraServiceError: Error {
