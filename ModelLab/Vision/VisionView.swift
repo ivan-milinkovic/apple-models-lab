@@ -223,13 +223,13 @@ struct VisionView: View {
     
     /// Returns the uniform scale factor and centering offset that resizeAspectFill applies
     /// when fitting `viewModel.uprightImageSize` into `containerSize`.
-    private func aspectFillTransform(containerSize size: CGSize) -> (scale: CGFloat?, offset: CGPoint) {
+    private func aspectFillTransform(containerSize: CGSize) -> (scale: CGFloat?, offset: CGPoint) {
         let imageSize = viewModel.uprightImageSize
         guard imageSize.width > 0, imageSize.height > 0 else { return (nil, .zero) }
-        let scale = max(size.width / imageSize.width, size.height / imageSize.height)
+        let scale = max(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
         let scaledWidth = imageSize.width * scale
         let scaledHeight = imageSize.height * scale
-        let offset = CGPoint(x: (size.width - scaledWidth) / 2, y: (size.height - scaledHeight) / 2)
+        let offset = CGPoint(x: (containerSize.width - scaledWidth) / 2, y: (containerSize.height - scaledHeight) / 2)
         return (scale, offset)
     }
 }
