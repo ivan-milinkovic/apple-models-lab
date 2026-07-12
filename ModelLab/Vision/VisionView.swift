@@ -24,7 +24,7 @@ struct VisionView: View {
                 Text(message)
             }
         }
-        .containerRelativeFrame([.horizontal, .vertical])
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .overlay(alignment: .bottomTrailing) {
             #if os(iOS)
             cameraSwitchButton
